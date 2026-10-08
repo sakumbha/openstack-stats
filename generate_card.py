@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import html
 import json
 import os
 import subprocess
@@ -319,7 +320,7 @@ def build_svg(projects):
     )
 
     svg.append(
-        f'<a href="{STACKALYTICS_URL}" target="_blank">'
+        f'<a href="{html.escape(STACKALYTICS_URL, quote=True)}" target="_blank">'
         '<text x="42" y="420" '
         'font-family="Arial, Helvetica, sans-serif" '
         'font-size="12" fill="#8b949e">'
