@@ -1,8 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="300" viewBox="0 0 980 300">
-<rect x="1" y="1" width="978" height="298" rx="18" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
-<text x="32" y="60" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#f0f6fc">OpenStack Contributor</text>
-<text x="32" y="88" font-family="Arial,Helvetica,sans-serif" font-size="15" fill="#8b949e">Stackalytics · sakumbha</text>
-<text x="32" y="155" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#8b949e">TOTAL PERSON-DAYS</text>
-<text x="32" y="208" font-family="Arial,Helvetica,sans-serif" font-size="50" font-weight="700" fill="#f0f6fc">Updating…</text>
-<text x="32" y="236" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#8b949e">Run the GitHub Action to fetch Stackalytics data.</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="430" viewBox="0 0 900 430">
+<rect width="900" height="430" rx="18" fill="#0d1117"/>
+<rect x="0" y="0" width="8" height="430" rx="4" fill="#e01b24"/>
+<rect x="1" y="1" width="898" height="428" rx="18" fill="none" stroke="#30363d"/>
+<text x="42" y="50" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#f0f6fc">OpenStack Contributor</text>
+<rect x="42" y="68" width="108" height="28" rx="14" fill="#21262d" stroke="#30363d"/>
+<text x="96" y="87" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#58a6ff">UPSTREAM</text>
+<text x="170" y="87" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#8b949e">Stackalytics · sakumbha</text>
+<text x="42" y="158" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="700" fill="#ffffff">44</text>
+<text x="43" y="185" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#8b949e">person-days across OpenStack</text>
+<text x="42" y="218" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#58a6ff">Glance → Manila</text>
+<text x="165" y="218" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#8b949e">upstream contribution journey</text>
+<rect x="42" y="270" width="816" height="14" rx="6" fill="#30363d"/>
+<rect x="42" y="270" width="816.00" height="14" rx="6" fill="#e01b24"/>
+<text x="42" y="260" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" fill="#f0f6fc">Glance</text>
+<text x="858" y="260" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#8b949e">20 person-days</text>
+<rect x="42" y="318" width="816" height="14" rx="6" fill="#30363d"/>
+<rect x="42" y="318" width="652.80" height="14" rx="6" fill="#e01b24"/>
+<text x="42" y="308" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" fill="#f0f6fc">Manila</text>
+<text x="858" y="308" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#8b949e">16 person-days</text>
+<rect x="42" y="366" width="816" height="14" rx="6" fill="#30363d"/>
+<rect x="42" y="366" width="326.40" height="14" rx="6" fill="#e01b24"/>
+<text x="42" y="356" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" fill="#f0f6fc">Other OpenStack</text>
+<text x="858" y="356" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#8b949e">8 person-days</text>
+<line x1="42" y1="405" x2="858" y2="405" stroke="#21262d"/>
+<a href="https://www.stackalytics.io/?user_id=sakumbha&metric=person-day" target="_blank"><text x="42" y="420" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#8b949e">View full Stackalytics profile →</text></a>
 </svg>
