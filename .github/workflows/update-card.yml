@@ -3,7 +3,7 @@ name: Update OpenStack contribution card
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * 1" # Every Monday at 03:17 UTC
+    - cron: "17 3 * * 1"
 
 permissions:
   contents: write
@@ -11,9 +11,21 @@ permissions:
 jobs:
   update-card:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Update CA certificates
+        run: |
+          sudo apt-get update
+          sudo apt-get install --reinstall -y ca-certificates
+          sudo update-ca-certificates
+
+      - name: Test Stackalytics
+        run: |
+          curl -v --fail \
+            "https://www.stackalytics.io/api/1.0/stats/modules?release=all&metric=person-day&project_type=openstack&user_id=sakumbha"
 
       - name: Generate card
         env:
