@@ -1,36 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="570" viewBox="0 0 960 570">
-<rect x="1" y="1" width="958" height="568" rx="20" fill="#0d1117" stroke="#30363d"/>
-<rect x="1" y="1" width="8" height="568" rx="4" fill="#e01b24"/>
-<text x="42" y="43" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#8b949e">OPENSTACK CONTRIBUTOR</text>
-<text x="42" y="79" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#f0f6fc">Sahil Kumbhar</text>
-<text x="42" y="103" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#8b949e">@sakumbha</text>
-<rect x="770" y="34" width="140" height="34" rx="17" fill="#161b22" stroke="#30363d"/>
-<text x="840" y="56" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#58a6ff">UPSTREAM</text>
-<rect x="42" y="130" width="270" height="105" rx="14" fill="#161b22" stroke="#21262d"/>
-<text x="64" y="175" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#ffffff">62</text>
-<text x="64" y="205" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#8b949e">patch sets</text>
-<rect x="330" y="130" width="270" height="105" rx="14" fill="#161b22" stroke="#21262d"/>
-<text x="352" y="175" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#ffffff">2</text>
-<text x="352" y="205" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#8b949e">core projects</text>
-<rect x="618" y="130" width="292" height="105" rx="14" fill="#161b22" stroke="#21262d"/>
-<text x="640" y="175" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#e01b24">80.6%</text>
-<text x="640" y="205" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#8b949e">Glance + Manila</text>
-<text x="42" y="276" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#8b949e">CONTRIBUTION FOCUS</text>
-<text x="42" y="306" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#f0f6fc">Glance → Manila</text>
-<text x="910" y="306" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#e01b24">50 patch sets · 80.6% of activity</text>
-<rect x="42" y="321" width="868" height="12" rx="6" fill="#30363d"/>
-<rect x="42" y="321" width="700.0" height="12" rx="6" fill="#e01b24"/>
-<text x="42" y="372" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#8b949e">CORE PROJECT BREAKDOWN</text>
-<text x="42" y="404" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f0f6fc">Glance</text>
-<text x="910" y="404" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#8b949e">27 patch sets · 54.0%</text>
-<rect x="42" y="417" width="868" height="10" rx="5" fill="#30363d"/>
-<rect x="42" y="417" width="468.72" height="10" rx="5" fill="#e01b24"/>
-<text x="42" y="450" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f0f6fc">Manila</text>
-<text x="910" y="450" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#8b949e">23 patch sets · 46.0%</text>
-<rect x="42" y="463" width="868" height="10" rx="5" fill="#30363d"/>
-<rect x="42" y="463" width="399.28" height="10" rx="5" fill="#e01b24"/>
-<line x1="42" y1="510" x2="910" y2="510" stroke="#21262d"/>
-<text x="42" y="540" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="400" fill="#8b949e">Glance → Manila · OpenStack upstream development</text>
-<a href="https://www.stackalytics.io/?user_id=sakumbha&amp;metric=patches" target="_blank"><text x="910" y="540" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600" fill="#58a6ff">View Stackalytics →</text></a>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="590" viewBox="0 0 960 590">
+<rect x="1" y="1" width="958" height="588" rx="20" fill="#0d1117" stroke="#30363d"/>
+<rect x="1" y="1" width="8" height="588" rx="4" fill="#3fb950"/>
+<text x="42" y="44" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#8b949e">OPENSTACK CONTRIBUTOR</text>
+<text x="42" y="80" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="700" fill="#f0f6fc">Sahil Kumbhar</text>
+<text x="42" y="105" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#8b949e">@sakumbha</text>
+<rect x="770" y="35" width="140" height="35" rx="18" fill="#122117" stroke="#244b2d"/>
+<text x="840" y="58" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#56d364">UPSTREAM</text>
+<rect x="42" y="132" width="270" height="105" rx="14" fill="#161b22" stroke="#21262d"/>
+<text x="64" y="176" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="39" font-weight="700" fill="#f0f6fc">62</text>
+<text x="64" y="207" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#8b949e">total patch sets</text>
+<rect x="330" y="132" width="270" height="105" rx="14" fill="#102116" stroke="#244b2d"/>
+<text x="352" y="176" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="39" font-weight="700" fill="#56d364">23</text>
+<text x="352" y="207" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#8b949e">Manila patch sets</text>
+<rect x="618" y="132" width="292" height="105" rx="14" fill="#161b22" stroke="#21262d"/>
+<text x="640" y="176" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="39" font-weight="700" fill="#f0f6fc">2</text>
+<text x="640" y="207" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="600" fill="#8b949e">primary projects</text>
+<text x="42" y="276" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#8b949e">CURRENT FOCUS</text>
+<text x="42" y="307" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#56d364">Manila</text>
+<text x="42" y="331" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#8b949e">Shared File Systems Service</text>
+<text x="910" y="307" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#56d364">23 patch sets · 37.1% of total</text>
+<rect x="42" y="345" width="868" height="10" rx="5" fill="#30363d"/>
+<rect x="42" y="345" width="322.0" height="10" rx="5" fill="#3fb950"/>
+<text x="42" y="390" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#8b949e">CONTRIBUTION BREAKDOWN</text>
+<text x="42" y="421" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#f0f6fc">Glance</text>
+<text x="910" y="421" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#8b949e">27 patch sets · 43.5%</text>
+<rect x="42" y="435" width="868" height="10" rx="5" fill="#30363d"/>
+<rect x="42" y="435" width="378.0" height="10" rx="5" fill="#2ea043"/>
+<text x="42" y="475" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#56d364">Manila</text>
+<text x="910" y="475" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#56d364">23 patch sets · 37.1%</text>
+<rect x="42" y="489" width="868" height="10" rx="5" fill="#30363d"/>
+<rect x="42" y="489" width="322.0" height="10" rx="5" fill="#3fb950"/>
+<text x="42" y="529" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600" fill="#8b949e">Supporting OpenStack</text>
+<text x="910" y="529" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="400" fill="#8b949e">12 patch sets · 19.4%</text>
+<line x1="42" y1="550" x2="910" y2="550" stroke="#21262d"/>
+<text x="42" y="573" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="400" fill="#8b949e">Glance → Manila · OpenStack upstream development</text>
+<a href="https://www.stackalytics.io/?user_id=sakumbha&amp;metric=patches" target="_blank"><text x="910" y="573" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600" fill="#56d364">View Stackalytics →</text></a>
 </svg>
