@@ -52,36 +52,74 @@ def get_json(path, params):
 
     print(f"Fetching: {url}")
 
-    result = subprocess.run(
-        [
-            "curl",
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
+    try:
+        result = subprocess.run(
+            [
+                "curl",
 
-            # Stackalytics currently has a certificate-chain
-            # issue on GitHub Actions / Ubuntu.
-            "--insecure",
+                # Fail on HTTP errors.
+                "--fail",
 
-            "--retry",
-            "3",
-            "--retry-delay",
-            "2",
+                # Keep stdout clean for JSON parsing.
+                "--silent",
 
-            "--user-agent",
-            "openstack-stats-card/1.0",
+                # Still show errors.
+                "--show-error",
 
-            url,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=True,
-    )
+                # Follow redirects.
+                "--location",
+
+                # Stackalytics currently has a certificate-chain
+                # problem when accessed from GitHub Actions/Ubuntu.
+                "--insecure",
+
+                # Don't spend too long establishing the connection.
+                "--connect-timeout",
+                "15",
+
+                # Maximum time for one curl invocation.
+                "--max-time",
+                "120",
+
+                # Retry temporary failures.
+                "--retry",
+                "3",
+
+                "--retry-delay",
+                "3",
+
+                "--retry-all-errors",
+
+                "--user-agent",
+                "openstack-stats-card/1.0",
+
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=135,
+            check=True,
+        )
+
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "Stackalytics API timed out after 135 seconds.\n"
+            "The Stackalytics patches endpoint appears to be "
+            "temporarily slow or unavailable."
+        ) from exc
+
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+
+        raise RuntimeError(
+            "Stackalytics API request failed.\n"
+            f"curl exit code: {exc.returncode}\n"
+            f"curl error: {stderr}"
+        ) from exc
 
     try:
         return json.loads(result.stdout)
+
     except json.JSONDecodeError as exc:
         raise RuntimeError(
             "Stackalytics returned invalid JSON:\n"
@@ -93,7 +131,7 @@ def get_project_stats():
     """
     Get patch-set statistics from Stackalytics.
 
-    Stackalytics' `patches` metric represents patch sets by module.
+    The `patches` metric represents patch sets by module.
     """
 
     data = get_json(
@@ -106,9 +144,16 @@ def get_project_stats():
         },
     )
 
+    stats = data.get("stats", [])
+
+    if not stats:
+        raise RuntimeError(
+            "Stackalytics returned no project statistics."
+        )
+
     projects = []
 
-    for item in data.get("stats", []):
+    for item in stats:
         name = item.get("name")
         metric = item.get("metric", 0)
 
@@ -180,7 +225,7 @@ def add_text(
     weight="400",
     anchor="start",
 ):
-    """Add a text element."""
+    """Add an SVG text element."""
 
     svg.append(
         f'<text '
@@ -206,7 +251,7 @@ def add_rect(
     radius=10,
     stroke=None,
 ):
-    """Add a rounded rectangle."""
+    """Add an SVG rounded rectangle."""
 
     stroke_attr = ""
 
@@ -236,7 +281,7 @@ def add_bar(
 ):
     """Add a horizontal progress bar."""
 
-    # Background
+    # Background.
     add_rect(
         svg,
         x,
@@ -274,7 +319,7 @@ def build_svg(projects):
     """Build the OpenStack contributor dashboard."""
 
     # ------------------------------------------------------------------------
-    # Find project statistics
+    # Find Glance and Manila
     # ------------------------------------------------------------------------
 
     glance = next(
@@ -295,19 +340,20 @@ def build_svg(projects):
         0,
     )
 
+    # Total activity returned by Stackalytics.
     total = sum(
         project["value"]
         for project in projects
     )
 
-    # Everything other than Glance and Manila.
+    # Everything except Glance and Manila.
     supporting = max(
         0,
         total - glance - manila,
     )
 
     # ------------------------------------------------------------------------
-    # Card
+    # Card dimensions
     # ------------------------------------------------------------------------
 
     width = 960
@@ -340,7 +386,7 @@ def build_svg(projects):
         stroke=BORDER,
     )
 
-    # Green accent
+    # Green accent strip.
     add_rect(
         svg,
         1,
@@ -384,7 +430,7 @@ def build_svg(projects):
         color=MUTED,
     )
 
-    # Upstream badge
+    # Upstream badge.
     add_rect(
         svg,
         770,
@@ -414,7 +460,7 @@ def build_svg(projects):
     stat_y = 132
     stat_height = 105
 
-    # Total patch sets
+    # Total patch sets.
     add_rect(
         svg,
         42,
@@ -446,7 +492,7 @@ def build_svg(projects):
         weight="600",
     )
 
-    # Manila
+    # Manila.
     add_rect(
         svg,
         330,
@@ -478,7 +524,7 @@ def build_svg(projects):
         weight="600",
     )
 
-    # Primary projects
+    # Primary projects.
     add_rect(
         svg,
         618,
@@ -543,7 +589,6 @@ def build_svg(projects):
         color=MUTED,
     )
 
-    # Manila percentage of all patch sets
     manila_percentage = percent(
         manila,
         total,
@@ -561,7 +606,7 @@ def build_svg(projects):
         anchor="end",
     )
 
-    # Manila focus bar
+    # Manila focus bar.
     add_bar(
         svg,
         42,
@@ -573,7 +618,7 @@ def build_svg(projects):
     )
 
     # ------------------------------------------------------------------------
-    # Project breakdown
+    # Contribution breakdown
     # ------------------------------------------------------------------------
 
     add_text(
@@ -586,7 +631,10 @@ def build_svg(projects):
         weight="700",
     )
 
+    # ------------------------------------------------------------------------
     # Glance
+    # ------------------------------------------------------------------------
+
     glance_percentage = percent(
         glance,
         total,
@@ -623,7 +671,10 @@ def build_svg(projects):
         color="#2ea043",
     )
 
+    # ------------------------------------------------------------------------
     # Manila
+    # ------------------------------------------------------------------------
+
     add_text(
         svg,
         42,
@@ -655,7 +706,10 @@ def build_svg(projects):
         color=GREEN,
     )
 
+    # ------------------------------------------------------------------------
     # Supporting repositories
+    # ------------------------------------------------------------------------
+
     supporting_percentage = percent(
         supporting,
         total,
@@ -704,7 +758,7 @@ def build_svg(projects):
         color=MUTED,
     )
 
-    # Escape & so SVG remains valid XML.
+    # XML-safe URL.
     safe_url = html.escape(
         STACKALYTICS_URL,
         quote=True,
@@ -742,11 +796,6 @@ def main():
 
     projects = get_project_stats()
 
-    if not projects:
-        raise RuntimeError(
-            "No project statistics returned by Stackalytics."
-        )
-
     print("\nPatch sets by module:")
 
     for project in projects:
@@ -754,6 +803,10 @@ def main():
             f"  {project['name']}: "
             f"{fmt(project['value'])} patch sets"
         )
+
+    # ------------------------------------------------------------------------
+    # Extract Glance / Manila
+    # ------------------------------------------------------------------------
 
     glance = next(
         (
@@ -783,18 +836,25 @@ def main():
         total - glance - manila,
     )
 
+    # ------------------------------------------------------------------------
+    # Print dashboard statistics
+    # ------------------------------------------------------------------------
+
     print("\nDashboard statistics:")
 
     print(
-        f"  Total patch sets: {fmt(total)}"
+        f"  Total patch sets: "
+        f"{fmt(total)}"
     )
 
     print(
-        f"  Glance: {fmt(glance)}"
+        f"  Glance: "
+        f"{fmt(glance)}"
     )
 
     print(
-        f"  Manila: {fmt(manila)}"
+        f"  Manila: "
+        f"{fmt(manila)}"
     )
 
     print(
@@ -806,6 +866,10 @@ def main():
         f"  Manila share: "
         f"{percent(manila, total):.1f}%"
     )
+
+    # ------------------------------------------------------------------------
+    # Generate SVG
+    # ------------------------------------------------------------------------
 
     svg = build_svg(projects)
 
