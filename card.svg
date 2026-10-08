@@ -24,5 +24,5 @@
 <text x="42" y="356" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" fill="#f0f6fc">Other OpenStack</text>
 <text x="858" y="356" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#8b949e">8 person-days</text>
 <line x1="42" y1="405" x2="858" y2="405" stroke="#21262d"/>
-<a href="https://www.stackalytics.io/?user_id=sakumbha&metric=person-day" target="_blank"><text x="42" y="420" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#8b949e">View full Stackalytics profile →</text></a>
+<a href="https://www.stackalytics.io/?user_id=sakumbha&amp;metric=person-day" target="_blank"><text x="42" y="420" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#8b949e">View full Stackalytics profile →</text></a>
 </svg>
