@@ -24,12 +24,15 @@ STACKALYTICS_URL = (
 
 
 # ============================================================================
-# Colors
+# Theme
 # ============================================================================
 
 BG = "#0d1117"
 CARD = "#161b22"
+CARD_ALT = "#0f1419"
+
 BORDER = "#30363d"
+BORDER_LIGHT = "#21262d"
 
 TEXT = "#f0f6fc"
 MUTED = "#8b949e"
@@ -38,11 +41,12 @@ GREEN = "#3fb950"
 BRIGHT_GREEN = "#56d364"
 DARK_GREEN = "#238636"
 
-BAR_BG = "#30363d"
+GREEN_BG = "#102116"
+GREEN_BORDER = "#24552f"
 
 
 # ============================================================================
-# Stackalytics API
+# Stackalytics
 # ============================================================================
 
 def get_json(path, params):
@@ -56,32 +60,21 @@ def get_json(path, params):
         result = subprocess.run(
             [
                 "curl",
-
-                # Fail on HTTP errors.
                 "--fail",
-
-                # Keep stdout clean for JSON parsing.
                 "--silent",
-
-                # Still show errors.
                 "--show-error",
-
-                # Follow redirects.
                 "--location",
 
                 # Stackalytics currently has a certificate-chain
-                # problem when accessed from GitHub Actions/Ubuntu.
+                # issue on Ubuntu/GitHub Actions.
                 "--insecure",
 
-                # Don't spend too long establishing the connection.
                 "--connect-timeout",
                 "15",
 
-                # Maximum time for one curl invocation.
                 "--max-time",
                 "120",
 
-                # Retry temporary failures.
                 "--retry",
                 "3",
 
@@ -104,8 +97,8 @@ def get_json(path, params):
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(
             "Stackalytics API timed out after 135 seconds.\n"
-            "The Stackalytics patches endpoint appears to be "
-            "temporarily slow or unavailable."
+            "The Stackalytics patches endpoint may be temporarily slow "
+            "or unavailable."
         ) from exc
 
     except subprocess.CalledProcessError as exc:
@@ -122,17 +115,12 @@ def get_json(path, params):
 
     except json.JSONDecodeError as exc:
         raise RuntimeError(
-            "Stackalytics returned invalid JSON:\n"
-            f"{result.stdout}"
+            "Stackalytics returned invalid JSON."
         ) from exc
 
 
 def get_project_stats():
-    """
-    Get patch-set statistics from Stackalytics.
-
-    The `patches` metric represents patch sets by module.
-    """
+    """Return patch-set statistics grouped by OpenStack module."""
 
     data = get_json(
         "/api/1.0/stats/modules",
@@ -155,20 +143,20 @@ def get_project_stats():
 
     for item in stats:
         name = item.get("name")
-        metric = item.get("metric", 0)
+        value = item.get("metric", 0)
 
         if not name:
             continue
 
         try:
-            metric = float(metric)
+            value = float(value)
         except (TypeError, ValueError):
             continue
 
         projects.append(
             {
                 "name": name,
-                "value": metric,
+                "value": value,
             }
         )
 
@@ -181,25 +169,16 @@ def get_project_stats():
 
 
 # ============================================================================
-# Formatting helpers
+# Helpers
 # ============================================================================
 
 def fmt(value):
-    """Format a number cleanly."""
+    """Format numeric values without unnecessary decimals."""
 
     if value == int(value):
         return str(int(value))
 
     return f"{value:.1f}"
-
-
-def percent(value, total):
-    """Calculate percentage."""
-
-    if total <= 0:
-        return 0
-
-    return (value / total) * 100
 
 
 def esc(value):
@@ -211,21 +190,23 @@ def esc(value):
     )
 
 
-# ============================================================================
-# SVG helpers
-# ============================================================================
-
 def add_text(
     svg,
     x,
     y,
-    content,
+    text,
     size=16,
     color=TEXT,
     weight="400",
     anchor="start",
+    letter_spacing=0,
 ):
-    """Add an SVG text element."""
+    """Add SVG text."""
+
+    spacing = ""
+
+    if letter_spacing:
+        spacing = f' letter-spacing="{letter_spacing}px"'
 
     svg.append(
         f'<text '
@@ -235,8 +216,9 @@ def add_text(
         f'font-family="Arial, Helvetica, sans-serif" '
         f'font-size="{size}" '
         f'font-weight="{weight}" '
-        f'fill="{color}">'
-        f'{esc(content)}'
+        f'fill="{color}"'
+        f'{spacing}>'
+        f'{esc(text)}'
         f'</text>'
     )
 
@@ -251,7 +233,7 @@ def add_rect(
     radius=10,
     stroke=None,
 ):
-    """Add an SVG rounded rectangle."""
+    """Add SVG rounded rectangle."""
 
     stroke_attr = ""
 
@@ -270,98 +252,85 @@ def add_rect(
     )
 
 
-def add_bar(
+def add_line(
     svg,
-    x,
-    y,
-    width,
-    value,
-    max_value,
-    color=GREEN,
+    x1,
+    y1,
+    x2,
+    y2,
+    color=BORDER_LIGHT,
+    width=1,
 ):
-    """Add a horizontal progress bar."""
+    """Add SVG line."""
 
-    # Background.
-    add_rect(
-        svg,
-        x,
-        y,
-        width,
-        10,
-        BAR_BG,
-        radius=5,
-    )
-
-    if max_value <= 0:
-        return
-
-    fill_width = width * value / max_value
-
-    if fill_width <= 0:
-        return
-
-    add_rect(
-        svg,
-        x,
-        y,
-        max(5, fill_width),
-        10,
-        color,
-        radius=5,
+    svg.append(
+        f'<line '
+        f'x1="{x1}" '
+        f'y1="{y1}" '
+        f'x2="{x2}" '
+        f'y2="{y2}" '
+        f'stroke="{color}" '
+        f'stroke-width="{width}"/>'
     )
 
 
 # ============================================================================
-# Dashboard
+# Project lookup
+# ============================================================================
+
+def project_value(projects, name):
+    """Find a project by name."""
+
+    for project in projects:
+        if project["name"].lower() == name.lower():
+            return project["value"]
+
+    return 0
+
+
+# ============================================================================
+# SVG generation
 # ============================================================================
 
 def build_svg(projects):
-    """Build the OpenStack contributor dashboard."""
+    """Build the OpenStack contributor profile card."""
 
-    # ------------------------------------------------------------------------
-    # Find Glance and Manila
-    # ------------------------------------------------------------------------
+    glance = project_value(projects, "glance")
+    manila = project_value(projects, "manila")
 
-    glance = next(
-        (
-            project["value"]
-            for project in projects
-            if project["name"].lower() == "glance"
-        ),
-        0,
-    )
-
-    manila = next(
-        (
-            project["value"]
-            for project in projects
-            if project["name"].lower() == "manila"
-        ),
-        0,
-    )
-
-    # Total activity returned by Stackalytics.
     total = sum(
         project["value"]
         for project in projects
     )
 
-    # Everything except Glance and Manila.
     supporting = max(
         0,
         total - glance - manila,
     )
 
+    # Supporting repositories to show.
+    supporting_projects = [
+        project["name"]
+        for project in projects
+        if project["name"].lower()
+        not in {"glance", "manila"}
+    ]
+
+    # Show at most four names.
+    supporting_display = supporting_projects[:4]
+
+    if len(supporting_projects) > 4:
+        supporting_display.append("…")
+
     # ------------------------------------------------------------------------
-    # Card dimensions
+    # Canvas
     # ------------------------------------------------------------------------
 
     width = 960
-    height = 590
+    height = 570
 
     svg = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-
         (
             f'<svg '
             f'xmlns="http://www.w3.org/2000/svg" '
@@ -386,12 +355,12 @@ def build_svg(projects):
         stroke=BORDER,
     )
 
-    # Green accent strip.
+    # Green left accent.
     add_rect(
         svg,
         1,
         1,
-        8,
+        7,
         height - 2,
         GREEN,
         radius=4,
@@ -403,28 +372,29 @@ def build_svg(projects):
 
     add_text(
         svg,
-        42,
-        44,
+        40,
+        40,
         "OPENSTACK CONTRIBUTOR",
-        size=13,
+        size=12,
         color=MUTED,
         weight="700",
+        letter_spacing=1.2,
     )
 
     add_text(
         svg,
-        42,
-        80,
+        40,
+        76,
         "Sahil Kumbhar",
-        size=29,
+        size=28,
         color=TEXT,
         weight="700",
     )
 
     add_text(
         svg,
-        42,
-        105,
+        40,
+        100,
         f"@{USER}",
         size=14,
         color=MUTED,
@@ -433,60 +403,61 @@ def build_svg(projects):
     # Upstream badge.
     add_rect(
         svg,
-        770,
-        35,
-        140,
-        35,
-        "#122117",
-        radius=18,
-        stroke="#244b2d",
+        795,
+        28,
+        115,
+        32,
+        GREEN_BG,
+        radius=16,
+        stroke=GREEN_BORDER,
     )
 
     add_text(
         svg,
-        840,
-        58,
+        852,
+        49,
         "UPSTREAM",
-        size=12,
+        size=11,
         color=BRIGHT_GREEN,
         weight="700",
         anchor="middle",
+        letter_spacing=0.8,
     )
 
     # ------------------------------------------------------------------------
     # Top statistics
     # ------------------------------------------------------------------------
 
-    stat_y = 132
-    stat_height = 105
+    top_y = 125
+    box_h = 92
 
-    # Total patch sets.
+    # Total.
     add_rect(
         svg,
-        42,
-        stat_y,
-        270,
-        stat_height,
+        40,
+        top_y,
+        275,
+        box_h,
         CARD,
-        radius=14,
-        stroke="#21262d",
+        radius=13,
+        stroke=BORDER_LIGHT,
     )
 
     add_text(
         svg,
-        64,
-        stat_y + 44,
+        62,
+        top_y + 39,
         fmt(total),
-        size=39,
+        size=34,
         color=TEXT,
         weight="700",
     )
 
     add_text(
         svg,
-        64,
-        stat_y + 75,
-        "total patch sets",
+        62,
+        top_y + 68,
+        "patch sets",
         size=13,
         color=MUTED,
         weight="600",
@@ -496,20 +467,20 @@ def build_svg(projects):
     add_rect(
         svg,
         330,
-        stat_y,
-        270,
-        stat_height,
-        "#102116",
-        radius=14,
-        stroke="#244b2d",
+        top_y,
+        275,
+        box_h,
+        GREEN_BG,
+        radius=13,
+        stroke=GREEN_BORDER,
     )
 
     add_text(
         svg,
         352,
-        stat_y + 44,
+        top_y + 39,
         fmt(manila),
-        size=39,
+        size=34,
         color=BRIGHT_GREEN,
         weight="700",
     )
@@ -517,40 +488,40 @@ def build_svg(projects):
     add_text(
         svg,
         352,
-        stat_y + 75,
+        top_y + 68,
         "Manila patch sets",
         size=13,
         color=MUTED,
         weight="600",
     )
 
-    # Primary projects.
+    # Projects.
     add_rect(
         svg,
-        618,
-        stat_y,
-        292,
-        stat_height,
+        620,
+        top_y,
+        290,
+        box_h,
         CARD,
-        radius=14,
-        stroke="#21262d",
+        radius=13,
+        stroke=BORDER_LIGHT,
     )
 
     add_text(
         svg,
-        640,
-        stat_y + 44,
+        642,
+        top_y + 39,
         "2",
-        size=39,
+        size=34,
         color=TEXT,
         weight="700",
     )
 
     add_text(
         svg,
-        640,
-        stat_y + 75,
-        "primary projects",
+        642,
+        top_y + 68,
+        "core OpenStack projects",
         size=13,
         color=MUTED,
         weight="600",
@@ -562,203 +533,272 @@ def build_svg(projects):
 
     add_text(
         svg,
-        42,
-        276,
+        40,
+        258,
         "CURRENT FOCUS",
+        size=12,
+        color=MUTED,
+        weight="700",
+        letter_spacing=1.1,
+    )
+
+    # Focus card.
+    add_rect(
+        svg,
+        40,
+        278,
+        870,
+        92,
+        CARD,
+        radius=14,
+        stroke=BORDER,
+    )
+
+    # Green indicator.
+    add_rect(
+        svg,
+        40,
+        278,
+        5,
+        92,
+        GREEN,
+        radius=3,
+    )
+
+    # Manila icon / marker.
+    add_rect(
+        svg,
+        64,
+        299,
+        38,
+        38,
+        GREEN_BG,
+        radius=10,
+        stroke=GREEN_BORDER,
+    )
+
+    add_text(
+        svg,
+        83,
+        325,
+        "M",
+        size=18,
+        color=BRIGHT_GREEN,
+        weight="700",
+        anchor="middle",
+    )
+
+    add_text(
+        svg,
+        120,
+        313,
+        "Manila",
+        size=21,
+        color=BRIGHT_GREEN,
+        weight="700",
+    )
+
+    add_text(
+        svg,
+        120,
+        337,
+        "Shared File Systems Service",
         size=13,
         color=MUTED,
-        weight="700",
     )
 
     add_text(
         svg,
-        42,
-        307,
-        "Manila",
-        size=24,
-        color=BRIGHT_GREEN,
-        weight="700",
-    )
-
-    add_text(
-        svg,
-        42,
-        331,
-        "Shared File Systems Service",
-        size=14,
-        color=MUTED,
-    )
-
-    manila_percentage = percent(
-        manila,
-        total,
-    )
-
-    add_text(
-        svg,
-        910,
-        307,
-        f"{fmt(manila)} patch sets · "
-        f"{manila_percentage:.1f}% of total",
-        size=14,
-        color=BRIGHT_GREEN,
+        875,
+        317,
+        fmt(manila),
+        size=27,
+        color=TEXT,
         weight="700",
         anchor="end",
     )
 
-    # Manila focus bar.
-    add_bar(
+    add_text(
         svg,
-        42,
-        345,
-        868,
-        manila,
-        total,
-        color=GREEN,
+        875,
+        341,
+        "patch sets",
+        size=12,
+        color=MUTED,
+        anchor="end",
     )
 
     # ------------------------------------------------------------------------
-    # Contribution breakdown
+    # OpenStack projects
     # ------------------------------------------------------------------------
 
     add_text(
         svg,
-        42,
-        390,
-        "CONTRIBUTION BREAKDOWN",
-        size=13,
+        40,
+        404,
+        "OPENSTACK PROJECTS",
+        size=12,
         color=MUTED,
         weight="700",
+        letter_spacing=1.1,
     )
 
-    # ------------------------------------------------------------------------
-    # Glance
-    # ------------------------------------------------------------------------
-
-    glance_percentage = percent(
-        glance,
-        total,
+    # Glance card.
+    add_rect(
+        svg,
+        40,
+        424,
+        425,
+        72,
+        CARD,
+        radius=12,
+        stroke=BORDER_LIGHT,
     )
 
     add_text(
         svg,
-        42,
-        421,
+        62,
+        450,
         "Glance",
-        size=15,
+        size=16,
         color=TEXT,
         weight="700",
     )
 
     add_text(
         svg,
-        910,
-        421,
-        f"{fmt(glance)} patch sets · "
-        f"{glance_percentage:.1f}%",
-        size=14,
+        62,
+        475,
+        "Image Service",
+        size=12,
+        color=MUTED,
+    )
+
+    add_text(
+        svg,
+        435,
+        456,
+        fmt(glance),
+        size=23,
+        color=TEXT,
+        weight="700",
+        anchor="end",
+    )
+
+    add_text(
+        svg,
+        435,
+        477,
+        "patch sets",
+        size=11,
         color=MUTED,
         anchor="end",
     )
 
-    add_bar(
+    # Manila card.
+    add_rect(
         svg,
-        42,
-        435,
-        868,
-        glance,
-        total,
-        color="#2ea043",
+        485,
+        424,
+        425,
+        72,
+        GREEN_BG,
+        radius=12,
+        stroke=GREEN_BORDER,
     )
-
-    # ------------------------------------------------------------------------
-    # Manila
-    # ------------------------------------------------------------------------
 
     add_text(
         svg,
-        42,
-        475,
+        507,
+        450,
         "Manila",
-        size=15,
+        size=16,
         color=BRIGHT_GREEN,
         weight="700",
     )
 
     add_text(
         svg,
-        910,
+        507,
         475,
-        f"{fmt(manila)} patch sets · "
-        f"{manila_percentage:.1f}%",
-        size=14,
+        "Shared File Systems Service",
+        size=12,
+        color=MUTED,
+    )
+
+    add_text(
+        svg,
+        880,
+        456,
+        fmt(manila),
+        size=23,
         color=BRIGHT_GREEN,
+        weight="700",
         anchor="end",
     )
 
-    add_bar(
+    add_text(
         svg,
-        42,
-        489,
-        868,
-        manila,
-        total,
-        color=GREEN,
+        880,
+        477,
+        "patch sets",
+        size=11,
+        color=MUTED,
+        anchor="end",
     )
 
     # ------------------------------------------------------------------------
     # Supporting repositories
     # ------------------------------------------------------------------------
 
-    supporting_percentage = percent(
-        supporting,
-        total,
+    add_text(
+        svg,
+        40,
+        524,
+        "SUPPORTING OPENSTACK",
+        size=11,
+        color=MUTED,
+        weight="700",
+        letter_spacing=1,
     )
+
+    supporting_text = "  ·  ".join(
+        supporting_display
+    )
+
+    if not supporting_text:
+        supporting_text = "Additional OpenStack contributions"
 
     add_text(
         svg,
-        42,
-        529,
-        "Supporting OpenStack",
-        size=14,
+        200,
+        524,
+        supporting_text,
+        size=11,
         color=MUTED,
-        weight="600",
-    )
-
-    add_text(
-        svg,
-        910,
-        529,
-        f"{fmt(supporting)} patch sets · "
-        f"{supporting_percentage:.1f}%",
-        size=13,
-        color=MUTED,
-        anchor="end",
     )
 
     # ------------------------------------------------------------------------
     # Footer
     # ------------------------------------------------------------------------
 
-    svg.append(
-        '<line '
-        'x1="42" '
-        'y1="550" '
-        'x2="910" '
-        'y2="550" '
-        'stroke="#21262d"/>'
+    add_line(
+        svg,
+        40,
+        540,
+        910,
+        540,
     )
 
     add_text(
         svg,
-        42,
-        573,
-        "Glance → Manila · OpenStack upstream development",
-        size=12,
+        40,
+        558,
+        "OpenStack upstream development · Glance · Manila",
+        size=10,
         color=MUTED,
     )
 
-    # XML-safe URL.
     safe_url = html.escape(
         STACKALYTICS_URL,
         quote=True,
@@ -768,10 +808,10 @@ def build_svg(projects):
         f'<a href="{safe_url}" target="_blank">'
         '<text '
         'x="910" '
-        'y="573" '
+        'y="558" '
         'text-anchor="end" '
         'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="12" '
+        'font-size="10" '
         'font-weight="600" '
         f'fill="{BRIGHT_GREEN}">'
         'View Stackalytics →'
@@ -790,13 +830,12 @@ def build_svg(projects):
 
 def main():
     print(
-        f"Generating OpenStack contributor dashboard "
-        f"for: {USER}"
+        f"Generating OpenStack contributor card for: {USER}"
     )
 
     projects = get_project_stats()
 
-    print("\nPatch sets by module:")
+    print("\nStackalytics project statistics:")
 
     for project in projects:
         print(
@@ -805,26 +844,11 @@ def main():
         )
 
     # ------------------------------------------------------------------------
-    # Extract Glance / Manila
+    # Important values
     # ------------------------------------------------------------------------
 
-    glance = next(
-        (
-            project["value"]
-            for project in projects
-            if project["name"].lower() == "glance"
-        ),
-        0,
-    )
-
-    manila = next(
-        (
-            project["value"]
-            for project in projects
-            if project["name"].lower() == "manila"
-        ),
-        0,
-    )
+    glance = project_value(projects, "glance")
+    manila = project_value(projects, "manila")
 
     total = sum(
         project["value"]
@@ -836,39 +860,14 @@ def main():
         total - glance - manila,
     )
 
-    # ------------------------------------------------------------------------
-    # Print dashboard statistics
-    # ------------------------------------------------------------------------
-
-    print("\nDashboard statistics:")
-
-    print(
-        f"  Total patch sets: "
-        f"{fmt(total)}"
-    )
-
-    print(
-        f"  Glance: "
-        f"{fmt(glance)}"
-    )
-
-    print(
-        f"  Manila: "
-        f"{fmt(manila)}"
-    )
-
-    print(
-        f"  Supporting repositories: "
-        f"{fmt(supporting)}"
-    )
-
-    print(
-        f"  Manila share: "
-        f"{percent(manila, total):.1f}%"
-    )
+    print("\nCard statistics:")
+    print(f"  Total patch sets: {fmt(total)}")
+    print(f"  Glance: {fmt(glance)}")
+    print(f"  Manila: {fmt(manila)}")
+    print(f"  Supporting OpenStack: {fmt(supporting)}")
 
     # ------------------------------------------------------------------------
-    # Generate SVG
+    # Generate card
     # ------------------------------------------------------------------------
 
     svg = build_svg(projects)
@@ -878,9 +877,7 @@ def main():
         encoding="utf-8",
     )
 
-    print(
-        f"\nCard written to: {OUTPUT}"
-    )
+    print(f"\nGenerated: {OUTPUT}")
 
 
 if __name__ == "__main__":
