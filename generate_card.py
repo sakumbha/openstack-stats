@@ -8,18 +8,29 @@ import urllib.parse
 from pathlib import Path
 
 
+# ----------------------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------------------
+
 BASE = "https://www.stackalytics.io"
 OUTPUT = Path("card.svg")
 
 USER = os.environ.get("STACKALYTICS_USER", "sakumbha")
 
+# Stackalytics profile
 STACKALYTICS_URL = (
-    f"{BASE}/?user_id={urllib.parse.quote(USER)}&metric=person-day"
+    f"{BASE}/?user_id={urllib.parse.quote(USER)}"
+    f"&metric=patches"
 )
 
 
+# ----------------------------------------------------------------------
+# Stackalytics API
+# ----------------------------------------------------------------------
+
 def get_json(path, params):
     """Fetch JSON from Stackalytics."""
+
     url = f"{BASE}{path}?{urllib.parse.urlencode(params)}"
 
     print(f"Fetching: {url}")
@@ -32,16 +43,18 @@ def get_json(path, params):
             "--show-error",
             "--location",
 
-            # Stackalytics currently has a certificate-chain issue
-            # that causes Ubuntu/GitHub Actions to reject the TLS chain.
+            # Stackalytics currently has a certificate-chain
+            # issue on GitHub Actions/Ubuntu.
             "--insecure",
 
             "--retry",
             "3",
             "--retry-delay",
             "2",
+
             "--user-agent",
             "openstack-stats-card/1.0",
+
             url,
         ],
         capture_output=True,
@@ -54,17 +67,23 @@ def get_json(path, params):
         return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(
-            f"Stackalytics returned invalid JSON:\n{result.stdout}"
+            "Stackalytics returned invalid JSON:\n"
+            f"{result.stdout}"
         ) from exc
 
 
 def get_project_stats():
-    """Get OpenStack project person-day statistics."""
+    """
+    Get OpenStack patch-set statistics from Stackalytics.
+
+    Stackalytics' 'patches' metric represents Patch Sets by Module.
+    """
+
     data = get_json(
         "/api/1.0/stats/modules",
         {
             "release": "all",
-            "metric": "person-day",
+            "metric": "patches",
             "project_type": "openstack",
             "user_id": USER,
         },
@@ -93,238 +112,555 @@ def get_project_stats():
             }
         )
 
-    projects.sort(key=lambda x: x["value"], reverse=True)
+    projects.sort(
+        key=lambda project: project["value"],
+        reverse=True,
+    )
 
     return projects
 
 
-def format_number(value):
-    """Format a number cleanly."""
+# ----------------------------------------------------------------------
+# Formatting helpers
+# ----------------------------------------------------------------------
+
+def fmt(value):
+    """Format numbers cleanly."""
+
     if value == int(value):
         return str(int(value))
 
     return f"{value:.1f}"
 
 
-def make_bar(
+def percentage(value, total):
+    """Calculate percentage."""
+
+    if total <= 0:
+        return 0
+
+    return (value / total) * 100
+
+
+def esc(value):
+    """Escape text for SVG/XML."""
+
+    return html.escape(
+        str(value),
+        quote=True,
+    )
+
+
+# ----------------------------------------------------------------------
+# SVG helpers
+# ----------------------------------------------------------------------
+
+def add_text(
+    svg,
+    x,
+    y,
+    content,
+    size=16,
+    color="#f0f6fc",
+    weight="400",
+    anchor="start",
+):
+    """Add text element."""
+
+    svg.append(
+        f'<text '
+        f'x="{x}" '
+        f'y="{y}" '
+        f'text-anchor="{anchor}" '
+        f'font-family="Arial, Helvetica, sans-serif" '
+        f'font-size="{size}" '
+        f'font-weight="{weight}" '
+        f'fill="{color}">'
+        f'{esc(content)}'
+        f'</text>'
+    )
+
+
+def add_rect(
     svg,
     x,
     y,
     width,
     height,
+    fill,
+    radius=10,
+    stroke=None,
+):
+    """Add rounded rectangle."""
+
+    stroke_attr = ""
+
+    if stroke:
+        stroke_attr = f' stroke="{stroke}"'
+
+    svg.append(
+        f'<rect '
+        f'x="{x}" '
+        f'y="{y}" '
+        f'width="{width}" '
+        f'height="{height}" '
+        f'rx="{radius}" '
+        f'fill="{fill}"'
+        f'{stroke_attr}/>'
+    )
+
+
+def add_project_row(
+    svg,
+    name,
     value,
-    max_value,
-    label,
+    total,
+    x,
+    y,
+    width,
     color="#e01b24",
 ):
-    """Add a project bar to the SVG."""
+    """Add project name, patch count and progress bar."""
 
-    # Background
-    svg.append(
-        f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
-        f'rx="6" fill="#30363d"/>'
+    percent = percentage(
+        value,
+        total,
+    )
+
+    # Project name
+    add_text(
+        svg,
+        x,
+        y,
+        name,
+        size=15,
+        color="#f0f6fc",
+        weight="700",
+    )
+
+    # Patch-set count
+    add_text(
+        svg,
+        x + width,
+        y,
+        f"{fmt(value)} patch sets · {percent:.1f}%",
+        size=14,
+        color="#8b949e",
+        anchor="end",
+    )
+
+    # Background bar
+    bar_y = y + 13
+
+    add_rect(
+        svg,
+        x,
+        bar_y,
+        width,
+        10,
+        "#30363d",
+        radius=5,
     )
 
     # Filled bar
-    if max_value > 0:
-        fill_width = max(4, width * value / max_value)
-    else:
-        fill_width = 0
+    if percent > 0:
+        fill_width = width * percent / 100
 
-    svg.append(
-        f'<rect x="{x}" y="{y}" width="{fill_width:.2f}" '
-        f'height="{height}" rx="6" fill="{color}"/>'
-    )
+        add_rect(
+            svg,
+            x,
+            bar_y,
+            max(5, fill_width),
+            10,
+            color,
+            radius=5,
+        )
 
-    # Label
-    svg.append(
-        f'<text x="{x}" y="{y - 10}" '
-        f'font-family="Arial, Helvetica, sans-serif" '
-        f'font-size="16" font-weight="600" fill="#f0f6fc">'
-        f'{label}</text>'
-    )
 
-    # Value
-    svg.append(
-        f'<text x="{x + width}" y="{y - 10}" text-anchor="end" '
-        f'font-family="Arial, Helvetica, sans-serif" '
-        f'font-size="15" fill="#8b949e">'
-        f'{format_number(value)} person-days</text>'
-    )
-
+# ----------------------------------------------------------------------
+# SVG card
+# ----------------------------------------------------------------------
 
 def build_svg(projects):
-    """Build the contribution card SVG."""
+    """Build the OpenStack contribution card."""
 
-    # ---------------------------------------------------------
-    # Calculate totals
-    # ---------------------------------------------------------
-
-    total = sum(project["value"] for project in projects)
+    # --------------------------------------------------------------
+    # Find the two core projects
+    # --------------------------------------------------------------
 
     glance = next(
-        (p["value"] for p in projects if p["name"] == "glance"),
+        (
+            project["value"]
+            for project in projects
+            if project["name"].lower() == "glance"
+        ),
         0,
     )
 
     manila = next(
-        (p["value"] for p in projects if p["name"] == "manila"),
+        (
+            project["value"]
+            for project in projects
+            if project["name"].lower() == "manila"
+        ),
         0,
     )
 
-    # Everything other than Glance and Manila
-    other = total - glance - manila
+    # We intentionally focus the card on Glance + Manila.
+    core_total = glance + manila
 
-    # Avoid negative values due to unexpected API data
-    other = max(0, other)
+    # Total patch sets returned by Stackalytics.
+    all_patch_sets = sum(
+        project["value"]
+        for project in projects
+    )
 
-    # ---------------------------------------------------------
-    # SVG setup
-    # ---------------------------------------------------------
+    # --------------------------------------------------------------
+    # Card dimensions
+    # --------------------------------------------------------------
 
-    width = 900
-    height = 430
+    width = 960
+    height = 570
 
     svg = [
         '<?xml version="1.0" encoding="UTF-8"?>',
+
         (
-            f'<svg xmlns="http://www.w3.org/2000/svg" '
-            f'width="{width}" height="{height}" '
+            f'<svg '
+            f'xmlns="http://www.w3.org/2000/svg" '
+            f'width="{width}" '
+            f'height="{height}" '
             f'viewBox="0 0 {width} {height}">'
         ),
     ]
 
+    # --------------------------------------------------------------
     # Background
-    svg.append(
-        f'<rect width="{width}" height="{height}" '
-        f'rx="18" fill="#0d1117"/>'
+    # --------------------------------------------------------------
+
+    add_rect(
+        svg,
+        1,
+        1,
+        width - 2,
+        height - 2,
+        "#0d1117",
+        radius=20,
+        stroke="#30363d",
     )
 
     # OpenStack red accent
-    svg.append(
-        '<rect x="0" y="0" width="8" height="430" '
-        'rx="4" fill="#e01b24"/>'
+    add_rect(
+        svg,
+        1,
+        1,
+        8,
+        height - 2,
+        "#e01b24",
+        radius=4,
     )
 
-    # Subtle border
-    svg.append(
-        '<rect x="1" y="1" width="898" height="428" '
-        'rx="18" fill="none" stroke="#30363d"/>'
-    )
-
-    # ---------------------------------------------------------
+    # --------------------------------------------------------------
     # Header
-    # ---------------------------------------------------------
+    # --------------------------------------------------------------
 
-    svg.append(
-        '<text x="42" y="50" '
-        'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="26" font-weight="700" fill="#f0f6fc">'
-        'OpenStack Contributor</text>'
+    add_text(
+        svg,
+        42,
+        43,
+        "OPENSTACK CONTRIBUTOR",
+        size=13,
+        color="#8b949e",
+        weight="700",
+    )
+
+    add_text(
+        svg,
+        42,
+        79,
+        "Sahil Kumbhar",
+        size=28,
+        color="#f0f6fc",
+        weight="700",
+    )
+
+    add_text(
+        svg,
+        42,
+        103,
+        f"@{USER}",
+        size=14,
+        color="#8b949e",
     )
 
     # Upstream badge
-    svg.append(
-        '<rect x="42" y="68" width="108" height="28" '
-        'rx="14" fill="#21262d" stroke="#30363d"/>'
+    add_rect(
+        svg,
+        770,
+        34,
+        140,
+        34,
+        "#161b22",
+        radius=17,
+        stroke="#30363d",
     )
 
-    svg.append(
-        '<text x="96" y="87" text-anchor="middle" '
-        'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="13" font-weight="600" fill="#58a6ff">'
-        'UPSTREAM</text>'
+    add_text(
+        svg,
+        840,
+        56,
+        "UPSTREAM",
+        size=12,
+        color="#58a6ff",
+        weight="700",
+        anchor="middle",
     )
 
-    # Stackalytics username
-    svg.append(
-        f'<text x="170" y="87" '
-        f'font-family="Arial, Helvetica, sans-serif" '
-        f'font-size="14" fill="#8b949e">'
-        f'Stackalytics · {USER}</text>'
+    # --------------------------------------------------------------
+    # Main statistics
+    # --------------------------------------------------------------
+
+    stat_y = 130
+    stat_height = 105
+
+    # Total patch sets
+    add_rect(
+        svg,
+        42,
+        stat_y,
+        270,
+        stat_height,
+        "#161b22",
+        radius=14,
+        stroke="#21262d",
     )
 
-    # ---------------------------------------------------------
-    # Main total
-    # ---------------------------------------------------------
-
-    svg.append(
-        f'<text x="42" y="158" '
-        f'font-family="Arial, Helvetica, sans-serif" '
-        f'font-size="64" font-weight="700" fill="#ffffff">'
-        f'{format_number(total)}</text>'
+    add_text(
+        svg,
+        64,
+        stat_y + 45,
+        fmt(all_patch_sets),
+        size=38,
+        color="#ffffff",
+        weight="700",
     )
 
-    svg.append(
-        '<text x="43" y="185" '
-        'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="17" fill="#8b949e">'
-        'person-days across OpenStack</text>'
+    add_text(
+        svg,
+        64,
+        stat_y + 75,
+        "patch sets",
+        size=13,
+        color="#8b949e",
+        weight="600",
     )
 
-    # Glance → Manila transition
-    svg.append(
-        '<text x="42" y="218" '
-        'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="15" fill="#58a6ff">'
-        'Glance → Manila</text>'
+    # Core projects
+    add_rect(
+        svg,
+        330,
+        stat_y,
+        270,
+        stat_height,
+        "#161b22",
+        radius=14,
+        stroke="#21262d",
     )
 
-    svg.append(
-        '<text x="165" y="218" '
-        'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="15" fill="#8b949e">'
-        'upstream contribution journey</text>'
+    add_text(
+        svg,
+        352,
+        stat_y + 45,
+        "2",
+        size=38,
+        color="#ffffff",
+        weight="700",
     )
 
-    # ---------------------------------------------------------
-    # Project bars
-    # ---------------------------------------------------------
+    add_text(
+        svg,
+        352,
+        stat_y + 75,
+        "core projects",
+        size=13,
+        color="#8b949e",
+        weight="600",
+    )
 
-    bar_x = 42
-    bar_width = 816
-    bar_height = 14
+    # Glance + Manila
+    add_rect(
+        svg,
+        618,
+        stat_y,
+        292,
+        stat_height,
+        "#161b22",
+        radius=14,
+        stroke="#21262d",
+    )
 
-    # Only show these three groups
-    rows = [
-        ("Glance", glance),
-        ("Manila", manila),
-        ("Other OpenStack", other),
-    ]
+    core_percentage = percentage(
+        core_total,
+        all_patch_sets,
+    )
 
-    max_value = max(value for _, value in rows)
+    add_text(
+        svg,
+        640,
+        stat_y + 45,
+        f"{core_percentage:.1f}%",
+        size=38,
+        color="#e01b24",
+        weight="700",
+    )
 
-    y = 270
+    add_text(
+        svg,
+        640,
+        stat_y + 75,
+        "Glance + Manila",
+        size=13,
+        color="#8b949e",
+        weight="600",
+    )
 
-    for label, value in rows:
-        make_bar(
-            svg=svg,
-            x=bar_x,
-            y=y,
-            width=bar_width,
-            height=bar_height,
-            value=value,
-            max_value=max_value,
-            label=label,
+    # --------------------------------------------------------------
+    # Contribution focus
+    # --------------------------------------------------------------
+
+    add_text(
+        svg,
+        42,
+        276,
+        "CONTRIBUTION FOCUS",
+        size=13,
+        color="#8b949e",
+        weight="700",
+    )
+
+    add_text(
+        svg,
+        42,
+        306,
+        "Glance → Manila",
+        size=21,
+        color="#f0f6fc",
+        weight="700",
+    )
+
+    add_text(
+        svg,
+        910,
+        306,
+        f"{fmt(core_total)} patch sets · "
+        f"{core_percentage:.1f}% of activity",
+        size=14,
+        color="#e01b24",
+        weight="700",
+        anchor="end",
+    )
+
+    # Focus bar background
+    add_rect(
+        svg,
+        42,
+        321,
+        868,
+        12,
+        "#30363d",
+        radius=6,
+    )
+
+    # Focus bar
+    if core_percentage > 0:
+        add_rect(
+            svg,
+            42,
+            321,
+            max(
+                5,
+                868 * core_percentage / 100,
+            ),
+            12,
+            "#e01b24",
+            radius=6,
         )
 
-        y += 48
+    # --------------------------------------------------------------
+    # Project breakdown
+    # --------------------------------------------------------------
 
-    # ---------------------------------------------------------
+    add_text(
+        svg,
+        42,
+        372,
+        "CORE PROJECT BREAKDOWN",
+        size=13,
+        color="#8b949e",
+        weight="700",
+    )
+
+    # Glance
+    add_project_row(
+        svg,
+        "Glance",
+        glance,
+        core_total if core_total > 0 else 1,
+        42,
+        404,
+        868,
+    )
+
+    # Manila
+    add_project_row(
+        svg,
+        "Manila",
+        manila,
+        core_total if core_total > 0 else 1,
+        42,
+        450,
+        868,
+    )
+
+    # --------------------------------------------------------------
     # Footer
-    # ---------------------------------------------------------
+    # --------------------------------------------------------------
 
     svg.append(
-        '<line x1="42" y1="405" x2="858" y2="405" '
+        '<line '
+        'x1="42" '
+        'y1="510" '
+        'x2="910" '
+        'y2="510" '
         'stroke="#21262d"/>'
     )
 
+    add_text(
+        svg,
+        42,
+        540,
+        "Glance → Manila · OpenStack upstream development",
+        size=12,
+        color="#8b949e",
+    )
+
+    # Escape & for valid SVG/XML.
+    safe_url = html.escape(
+        STACKALYTICS_URL,
+        quote=True,
+    )
+
     svg.append(
-        f'<a href="{html.escape(STACKALYTICS_URL, quote=True)}" target="_blank">'
-        '<text x="42" y="420" '
+        f'<a href="{safe_url}" target="_blank">'
+        '<text '
+        'x="910" '
+        'y="540" '
+        'text-anchor="end" '
         'font-family="Arial, Helvetica, sans-serif" '
-        'font-size="12" fill="#8b949e">'
-        'View full Stackalytics profile →'
+        'font-size="12" '
+        'font-weight="600" '
+        'fill="#58a6ff">'
+        'View Stackalytics →'
         '</text>'
         '</a>'
     )
@@ -334,35 +670,80 @@ def build_svg(projects):
     return "\n".join(svg)
 
 
+# ----------------------------------------------------------------------
+# Main
+# ----------------------------------------------------------------------
+
 def main():
-    print(f"Generating OpenStack contribution card for: {USER}")
+    print(
+        f"Generating OpenStack patch-set card "
+        f"for: {USER}"
+    )
 
     projects = get_project_stats()
 
     if not projects:
         raise RuntimeError(
-            "No project statistics were returned by Stackalytics."
+            "No project statistics returned by Stackalytics."
         )
 
-    print("\nProject statistics:")
+    print("\nPatch sets by module:")
 
     for project in projects:
         print(
             f"  {project['name']}: "
-            f"{format_number(project['value'])} person-days"
+            f"{fmt(project['value'])} patch sets"
         )
 
-    total = sum(project["value"] for project in projects)
+    # --------------------------------------------------------------
+    # Print the two projects we care about
+    # --------------------------------------------------------------
+
+    glance = next(
+        (
+            project["value"]
+            for project in projects
+            if project["name"].lower() == "glance"
+        ),
+        0,
+    )
+
+    manila = next(
+        (
+            project["value"]
+            for project in projects
+            if project["name"].lower() == "manila"
+        ),
+        0,
+    )
+
+    core_total = glance + manila
+
+    print("\nCore projects:")
 
     print(
-        f"\nTotal: {format_number(total)} person-days"
+        f"  Glance: {fmt(glance)} patch sets"
+    )
+
+    print(
+        f"  Manila: {fmt(manila)} patch sets"
+    )
+
+    print(
+        f"  Glance + Manila: "
+        f"{fmt(core_total)} patch sets"
     )
 
     svg = build_svg(projects)
 
-    OUTPUT.write_text(svg, encoding="utf-8")
+    OUTPUT.write_text(
+        svg,
+        encoding="utf-8",
+    )
 
-    print(f"\nCard written to: {OUTPUT}")
+    print(
+        f"\nCard written to: {OUTPUT}"
+    )
 
 
 if __name__ == "__main__":
