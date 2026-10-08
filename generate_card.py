@@ -13,13 +13,12 @@ OUTPUT = Path("card.svg")
 USER = os.environ.get("STACKALYTICS_USER", "sakumbha")
 
 STACKALYTICS_URL = (
-    f"{BASE}/?user_id={urllib.parse.quote(USER)}"
-    "&metric=person-day"
+    f"{BASE}/?user_id={urllib.parse.quote(USER)}&metric=person-day"
 )
 
 
 def get_json(path, params):
-    """Fetch JSON from Stackalytics using curl."""
+    """Fetch JSON from Stackalytics."""
     url = f"{BASE}{path}?{urllib.parse.urlencode(params)}"
 
     print(f"Fetching: {url}")
@@ -31,6 +30,11 @@ def get_json(path, params):
             "--silent",
             "--show-error",
             "--location",
+
+            # Stackalytics currently has a certificate-chain issue
+            # that causes Ubuntu/GitHub Actions to reject the TLS chain.
+            "--insecure",
+
             "--retry",
             "3",
             "--retry-delay",
@@ -53,376 +57,311 @@ def get_json(path, params):
         ) from exc
 
 
-def escape_xml(value):
-    """Escape text for safe use inside SVG."""
-    return (
-        str(value)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&apos;")
+def get_project_stats():
+    """Get OpenStack project person-day statistics."""
+    data = get_json(
+        "/api/1.0/stats/modules",
+        {
+            "release": "all",
+            "metric": "person-day",
+            "project_type": "openstack",
+            "user_id": USER,
+        },
     )
 
+    stats = data.get("stats", [])
 
-def get_project_stats():
-    """Get contribution statistics grouped by OpenStack project."""
-    params = {
-        "release": "all",
-        "metric": "person-day",
-        "project_type": "openstack",
-        "user_id": USER,
-    }
+    projects = []
 
-    data = get_json("/api/1.0/stats/modules", params)
-
-    stats = {}
-
-    for item in data.get("stats", []):
+    for item in stats:
         name = item.get("name")
         metric = item.get("metric", 0)
 
-        if name:
-            try:
-                stats[name] = float(metric)
-            except (TypeError, ValueError):
-                stats[name] = 0
+        if not name:
+            continue
 
-    return stats
+        try:
+            metric = float(metric)
+        except (TypeError, ValueError):
+            continue
+
+        projects.append(
+            {
+                "name": name,
+                "value": metric,
+            }
+        )
+
+    projects.sort(key=lambda x: x["value"], reverse=True)
+
+    return projects
 
 
 def format_number(value):
-    """Format a number nicely."""
-    if float(value).is_integer():
+    """Format a number cleanly."""
+    if value == int(value):
         return str(int(value))
 
     return f"{value:.1f}"
 
 
-def make_bar(value, maximum, width=250):
-    """Create an SVG progress bar."""
-    if maximum <= 0:
-        percentage = 0
+def make_bar(
+    svg,
+    x,
+    y,
+    width,
+    height,
+    value,
+    max_value,
+    label,
+    color="#e01b24",
+):
+    """Add a project bar to the SVG."""
+
+    # Background
+    svg.append(
+        f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
+        f'rx="6" fill="#30363d"/>'
+    )
+
+    # Filled bar
+    if max_value > 0:
+        fill_width = max(4, width * value / max_value)
     else:
-        percentage = min(value / maximum, 1)
+        fill_width = 0
 
-    filled = max(2, int(width * percentage)) if value > 0 else 0
+    svg.append(
+        f'<rect x="{x}" y="{y}" width="{fill_width:.2f}" '
+        f'height="{height}" rx="6" fill="{color}"/>'
+    )
 
-    return f"""
-        <rect
-            x="0"
-            y="0"
-            width="{width}"
-            height="8"
-            rx="4"
-            fill="#30363d"
-        />
-        <rect
-            x="0"
-            y="0"
-            width="{filled}"
-            height="8"
-            rx="4"
-            fill="#58a6ff"
-        />
-    """
+    # Label
+    svg.append(
+        f'<text x="{x}" y="{y - 10}" '
+        f'font-family="Arial, Helvetica, sans-serif" '
+        f'font-size="16" font-weight="600" fill="#f0f6fc">'
+        f'{label}</text>'
+    )
+
+    # Value
+    svg.append(
+        f'<text x="{x + width}" y="{y - 10}" text-anchor="end" '
+        f'font-family="Arial, Helvetica, sans-serif" '
+        f'font-size="15" fill="#8b949e">'
+        f'{format_number(value)} person-days</text>'
+    )
 
 
-def build_svg(stats):
+def build_svg(projects):
     """Build the contribution card SVG."""
 
-    # Sort projects by contribution.
-    sorted_projects = sorted(
-        stats.items(),
-        key=lambda item: item[1],
-        reverse=True,
+    # ---------------------------------------------------------
+    # Calculate totals
+    # ---------------------------------------------------------
+
+    total = sum(project["value"] for project in projects)
+
+    glance = next(
+        (p["value"] for p in projects if p["name"] == "glance"),
+        0,
     )
 
-    total = sum(stats.values())
-
-    # Projects we want to highlight.
-    glance = stats.get("glance", 0)
-    manila = stats.get("manila", 0)
-
-    # Keep the remaining projects together.
-    other = sum(
-        value
-        for name, value in stats.items()
-        if name not in {"glance", "manila"}
+    manila = next(
+        (p["value"] for p in projects if p["name"] == "manila"),
+        0,
     )
 
-    # The top four projects for the card.
-    display_projects = [
-        ("Glance", glance),
-        ("Manila", manila),
-    ]
+    # Everything other than Glance and Manila
+    other = total - glance - manila
 
-    if other > 0:
-        display_projects.append(("Other OpenStack", other))
+    # Avoid negative values due to unexpected API data
+    other = max(0, other)
 
-    maximum = max(
-        [value for _, value in display_projects],
-        default=1,
-    )
+    # ---------------------------------------------------------
+    # SVG setup
+    # ---------------------------------------------------------
 
-    # Card dimensions.
     width = 900
     height = 430
 
-    project_rows = []
+    svg = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}">'
+        ),
+    ]
 
-    y = 280
+    # Background
+    svg.append(
+        f'<rect width="{width}" height="{height}" '
+        f'rx="18" fill="#0d1117"/>'
+    )
 
-    for project_name, value in display_projects:
-        bar = make_bar(value, maximum, 300)
+    # OpenStack red accent
+    svg.append(
+        '<rect x="0" y="0" width="8" height="430" '
+        'rx="4" fill="#e01b24"/>'
+    )
 
-        project_rows.append(
-            f"""
-            <g transform="translate(55,{y})">
-                <text
-                    x="0"
-                    y="0"
-                    fill="#f0f6fc"
-                    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-                    font-size="16"
-                    font-weight="600"
-                >
-                    {escape_xml(project_name)}
-                </text>
+    # Subtle border
+    svg.append(
+        '<rect x="1" y="1" width="898" height="428" '
+        'rx="18" fill="none" stroke="#30363d"/>'
+    )
 
-                <g transform="translate(180,-7)">
-                    {bar}
-                </g>
+    # ---------------------------------------------------------
+    # Header
+    # ---------------------------------------------------------
 
-                <text
-                    x="510"
-                    y="0"
-                    fill="#8b949e"
-                    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-                    font-size="15"
-                >
-                    {escape_xml(format_number(value))} person-days
-                </text>
-            </g>
-            """
+    svg.append(
+        '<text x="42" y="50" '
+        'font-family="Arial, Helvetica, sans-serif" '
+        'font-size="26" font-weight="700" fill="#f0f6fc">'
+        'OpenStack Contributor</text>'
+    )
+
+    # Upstream badge
+    svg.append(
+        '<rect x="42" y="68" width="108" height="28" '
+        'rx="14" fill="#21262d" stroke="#30363d"/>'
+    )
+
+    svg.append(
+        '<text x="96" y="87" text-anchor="middle" '
+        'font-family="Arial, Helvetica, sans-serif" '
+        'font-size="13" font-weight="600" fill="#58a6ff">'
+        'UPSTREAM</text>'
+    )
+
+    # Stackalytics username
+    svg.append(
+        f'<text x="170" y="87" '
+        f'font-family="Arial, Helvetica, sans-serif" '
+        f'font-size="14" fill="#8b949e">'
+        f'Stackalytics · {USER}</text>'
+    )
+
+    # ---------------------------------------------------------
+    # Main total
+    # ---------------------------------------------------------
+
+    svg.append(
+        f'<text x="42" y="158" '
+        f'font-family="Arial, Helvetica, sans-serif" '
+        f'font-size="64" font-weight="700" fill="#ffffff">'
+        f'{format_number(total)}</text>'
+    )
+
+    svg.append(
+        '<text x="43" y="185" '
+        'font-family="Arial, Helvetica, sans-serif" '
+        'font-size="17" fill="#8b949e">'
+        'person-days across OpenStack</text>'
+    )
+
+    # Glance → Manila transition
+    svg.append(
+        '<text x="42" y="218" '
+        'font-family="Arial, Helvetica, sans-serif" '
+        'font-size="15" fill="#58a6ff">'
+        'Glance → Manila</text>'
+    )
+
+    svg.append(
+        '<text x="165" y="218" '
+        'font-family="Arial, Helvetica, sans-serif" '
+        'font-size="15" fill="#8b949e">'
+        'upstream contribution journey</text>'
+    )
+
+    # ---------------------------------------------------------
+    # Project bars
+    # ---------------------------------------------------------
+
+    bar_x = 42
+    bar_width = 816
+    bar_height = 14
+
+    # Only show these three groups
+    rows = [
+        ("Glance", glance),
+        ("Manila", manila),
+        ("Other OpenStack", other),
+    ]
+
+    max_value = max(value for _, value in rows)
+
+    y = 270
+
+    for label, value in rows:
+        make_bar(
+            svg=svg,
+            x=bar_x,
+            y=y,
+            width=bar_width,
+            height=bar_height,
+            value=value,
+            max_value=max_value,
+            label=label,
         )
 
-        y += 42
+        y += 48
 
-    svg = f"""<svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="{width}"
-    height="{height}"
-    viewBox="0 0 {width} {height}"
-    role="img"
-    aria-label="OpenStack contribution statistics for {escape_xml(USER)}"
->
-    <defs>
-        <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#0d1117"/>
-            <stop offset="100%" stop-color="#161b22"/>
-        </linearGradient>
+    # ---------------------------------------------------------
+    # Footer
+    # ---------------------------------------------------------
 
-        <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#58a6ff"/>
-            <stop offset="100%" stop-color="#79c0ff"/>
-        </linearGradient>
-    </defs>
+    svg.append(
+        '<line x1="42" y1="405" x2="858" y2="405" '
+        'stroke="#21262d"/>'
+    )
 
-    <!-- Background -->
-    <rect
-        x="0"
-        y="0"
-        width="{width}"
-        height="{height}"
-        rx="18"
-        fill="url(#background)"
-        stroke="#30363d"
-        stroke-width="1"
-    />
+    svg.append(
+        f'<a href="{STACKALYTICS_URL}" target="_blank">'
+        '<text x="42" y="420" '
+        'font-family="Arial, Helvetica, sans-serif" '
+        'font-size="12" fill="#8b949e">'
+        'View full Stackalytics profile →'
+        '</text>'
+        '</a>'
+    )
 
-    <!-- OpenStack accent -->
-    <rect
-        x="0"
-        y="0"
-        width="7"
-        height="{height}"
-        rx="3"
-        fill="#e44749"
-    />
+    svg.append("</svg>")
 
-    <!-- Header -->
-    <text
-        x="55"
-        y="55"
-        fill="#f0f6fc"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="23"
-        font-weight="700"
-    >
-        OpenStack Contributor
-    </text>
-
-    <!-- Upstream badge -->
-    <rect
-        x="720"
-        y="32"
-        width="110"
-        height="32"
-        rx="16"
-        fill="#1f6feb"
-        fill-opacity="0.18"
-        stroke="#1f6feb"
-        stroke-opacity="0.45"
-    />
-
-    <circle
-        cx="738"
-        cy="48"
-        r="5"
-        fill="#3fb950"
-    />
-
-    <text
-        x="751"
-        y="54"
-        fill="#58a6ff"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="13"
-        font-weight="600"
-    >
-        Upstream
-    </text>
-
-    <!-- User -->
-    <text
-        x="55"
-        y="86"
-        fill="#8b949e"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="15"
-    >
-        Stackalytics · {escape_xml(USER)}
-    </text>
-
-    <!-- Main metric -->
-    <text
-        x="55"
-        y="155"
-        fill="url(#accent)"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="58"
-        font-weight="750"
-    >
-        {escape_xml(format_number(total))}
-    </text>
-
-    <text
-        x="55"
-        y="182"
-        fill="#8b949e"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="16"
-    >
-        total person-days
-    </text>
-
-    <!-- Contribution summary -->
-    <text
-        x="350"
-        y="143"
-        fill="#f0f6fc"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="17"
-        font-weight="600"
-    >
-        OpenStack upstream activity
-    </text>
-
-    <text
-        x="350"
-        y="171"
-        fill="#8b949e"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="14"
-    >
-        Glance → Manila
-    </text>
-
-    <text
-        x="350"
-        y="197"
-        fill="#8b949e"
-        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-        font-size="14"
-    >
-        Image Service → Shared File Systems
-    </text>
-
-    <!-- Divider -->
-    <line
-        x1="55"
-        y1="220"
-        x2="845"
-        y2="220"
-        stroke="#30363d"
-        stroke-width="1"
-    />
-
-    <!-- Project rows -->
-    {''.join(project_rows)}
-
-    <!-- Footer -->
-    <a
-        href="{escape_xml(STACKALYTICS_URL)}"
-        target="_blank"
-    >
-        <text
-            x="845"
-            y="402"
-            text-anchor="end"
-            fill="#58a6ff"
-            font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
-            font-size="14"
-            font-weight="600"
-        >
-            View full Stackalytics stats →
-        </text>
-    </a>
-</svg>
-"""
-
-    return svg
+    return "\n".join(svg)
 
 
 def main():
     print(f"Generating OpenStack contribution card for: {USER}")
 
-    stats = get_project_stats()
+    projects = get_project_stats()
 
-    if not stats:
+    if not projects:
         raise RuntimeError(
-            "Stackalytics returned no project statistics."
+            "No project statistics were returned by Stackalytics."
         )
 
-    print("\nContribution statistics:")
+    print("\nProject statistics:")
 
-    for project, value in sorted(
-        stats.items(),
-        key=lambda item: item[1],
-        reverse=True,
-    ):
-        print(f"  {project}: {format_number(value)} person-days")
+    for project in projects:
+        print(
+            f"  {project['name']}: "
+            f"{format_number(project['value'])} person-days"
+        )
 
-    total = sum(stats.values())
+    total = sum(project["value"] for project in projects)
 
-    print(f"\nTotal: {format_number(total)} person-days")
+    print(
+        f"\nTotal: {format_number(total)} person-days"
+    )
 
-    svg = build_svg(stats)
+    svg = build_svg(projects)
 
     OUTPUT.write_text(svg, encoding="utf-8")
 
-    print(f"\nGenerated: {OUTPUT}")
+    print(f"\nCard written to: {OUTPUT}")
 
 
 if __name__ == "__main__":
