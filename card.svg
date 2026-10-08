@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="300" viewBox="0 0 980 300">
+<rect x="1" y="1" width="978" height="298" rx="18" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
+<text x="32" y="60" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#f0f6fc">OpenStack Contributor</text>
+<text x="32" y="88" font-family="Arial,Helvetica,sans-serif" font-size="15" fill="#8b949e">Stackalytics · sakumbha</text>
+<text x="32" y="155" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#8b949e">TOTAL PERSON-DAYS</text>
+<text x="32" y="208" font-family="Arial,Helvetica,sans-serif" font-size="50" font-weight="700" fill="#f0f6fc">Updating…</text>
+<text x="32" y="236" font-family="Arial,Helvetica,sans-serif" font-size="14" fill="#8b949e">Run the GitHub Action to fetch Stackalytics data.</text>
+</svg>
